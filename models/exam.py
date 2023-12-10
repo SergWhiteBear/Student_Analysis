@@ -13,3 +13,4 @@ class Exam(Base):
     subject = relationship('Subject', back_populates='exams')
     exam_scores = Column(Integer)
     attending_classes = Column(Integer)
+    subject_predict = Column(Integer)

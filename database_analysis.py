@@ -9,9 +9,23 @@ from sklearn.svm import SVR
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from models.student import Student
+from database_handler import DatabaseHandler as dh
 
 
 # DONE
+def evaluate_model(model, X, y, model_name):
+    """
+    Оценивает производительность модели с использованием MAE.
+    """
+    predictions = model.predict(X)
+    mae = mean_absolute_error(y, predictions)
+    mse = mean_squared_error(y, predictions)
+    print(f"{model_name} - MAE: {mae} - MSE: {mse}")
+    r2 = r2_score(y, predictions)
+
+    print(f"R^2: {r2}")
+
+
 class DataAnalysis:
     def __init__(self, session):
         self.feature_names_before_scaling = None
@@ -20,6 +34,7 @@ class DataAnalysis:
         self.model = None
         self.feature_scaler = MinMaxScaler()
         self.target_scaler = MinMaxScaler()
+        self.dh = dh()
 
     def __del__(self):
         self.session.close()
@@ -106,14 +121,14 @@ class DataAnalysis:
             print(f'Возникла ошибка \n{e}')
 
         # Оценка производительности модели на тестовом наборе данных
-        self.evaluate_model(self.model, X_test, y_test, model_type)
+        evaluate_model(self.model, X_test, y_test, model_type)
 
         self.save_model(model_type)
         # График фактических и предсказанных значений
         predictions = self.model.predict(X_test)
         self.plot_predictions(y_test, predictions, model_type)
 
-    def general_predict(self, student_id: int, model_type: str, train_model: bool = False):
+    def general_predict(self, student_id: int, model_type: str = 'svr', train_model: bool = False):
         """
         Общий вывод по данным, т.е. прогноз среднего балла за экзамены
         """
@@ -155,9 +170,12 @@ class DataAnalysis:
         else:
             prediction = prediction[0][0]
 
+        # Теперь прогноз будет сразу записываться к студенту в базу
+        self.dh.add_prediction_student(student_id, prediction)
+
         return prediction
 
-    def train_subject(self, subject_id: int, model_type: str = 'svr'):
+    def train_subject(self, subject_id: int, model_type: str = 'svr_subject'):
         """
         Тренировка модели, есть возможность выбрать тип модели
         """
@@ -184,11 +202,11 @@ class DataAnalysis:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
         # Выбираем тип модели в зависимости от переданного параметра
-        if model_type == 'linear_regression':
+        if model_type == 'linear_regression_subject':
             self.model = LinearRegression()
-        elif model_type == 'svr':
+        elif model_type == 'svr_subject':
             self.model = SVR()
-        elif model_type == 'knn':
+        elif model_type == 'knn_subject':
             self.model = KNeighborsRegressor(n_neighbors=5)
 
         # Обучаем модель
@@ -200,13 +218,13 @@ class DataAnalysis:
         self.save_model(model_type)
 
         # Оценка производительности модели на тестовом наборе данных
-        self.evaluate_model(self.model, X_test, y_test, model_type)
+        evaluate_model(self.model, X_test, y_test, model_type)
 
         # График фактических и предсказанных значений
         predictions = self.model.predict(X_test)
         self.plot_predictions(y_test, predictions, model_type)
 
-    def subject_predict(self, student_id: int, subject_id: int, model_type: str = 'svr', train_model: bool = False):
+    def subject_predict(self, student_id: int, subject_id: int, model_type: str = 'svr_subject', train_model: bool = False):
         if train_model:
             self.train_subject(subject_id, model_type)
         else:
@@ -245,21 +263,13 @@ class DataAnalysis:
         else:
             prediction = prediction[0][0]
 
+        # Теперь прогноз для предмета у студента записывается сразу в базу
+        self.dh.add_prediction_subject(student_id, subject_id, prediction)
+
         return prediction
 
-    def evaluate_model(self, model, X, y, model_name):
-        """
-        Оценивает производительность модели с использованием MAE.
-        """
-        predictions = model.predict(X)
-        mae = mean_absolute_error(y, predictions)
-        mse = mean_squared_error(y, predictions)
-        print(f"{model_name} - MAE: {mae} - MSE: {mse}")
-        r2 = r2_score(y, predictions)
-
-        print(f"R^2: {r2}")
-
-    def plot_predictions(self, actual, predicted, model_name):
+    @staticmethod
+    def plot_predictions(actual, predicted, model_name):
         """
         Создает график фактических и предсказанных значений для визуального сравнения.
         """
