@@ -28,7 +28,7 @@ def generate_fake_data(session, num_groups=4, num_students=500, num_subjects=4):
     # Создание студентов
     list_val = [True, False]
     students = [Student(name=fake.name(), olympiad=random.choice(list_val),
-                        group_id=fake.random_element(elements=[group.id for group in groups]), general_predict=0) for _
+                        group_id=fake.random_element(elements=[group.id for group in groups]), general_predict='') for _
                 in range(num_students)]
     session.add_all(students)
     session.commit()
@@ -46,8 +46,8 @@ def generate_fake_data(session, num_groups=4, num_students=500, num_subjects=4):
     exams = []
     for student in students:
         for subject in subjects:
-            exam = Exam(student_id=student.id, subject_id=subject.id, exam_scores=fake.random_int(40, 100),
-                        attending_classes=fake.random_int(0, 10), subject_predict=0)
+            exam = Exam(student_id=student.id, subject_id=subject.id, exam_scores=fake.random_int(35, 100),
+                        subject_predict='')
             #exam = Exam(student_id=student.id, subject_id=subject.id, exam_scores=0,
                        # attending_classes=fake.random_int(0, 10), subject_predict=0)
             exams.append(exam)
@@ -55,8 +55,8 @@ def generate_fake_data(session, num_groups=4, num_students=500, num_subjects=4):
     session.commit()
 
     for exam in exams:
-        score = Score(value=fake.random_int(min=0, max=100), subject_id=exam.subject_id,
-                      student_id=exam.student_id)
+        score = Score(value=fake.random_int(min=35, max=100), subject_id=exam.subject_id,
+                      student_id=exam.student_id, attending_classes=fake.random_int(1, 10))
         #score = Score(value=0, subject_id=exam.subject_id,
                     #  student_id=exam.student_id)
         session.add(score)

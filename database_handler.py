@@ -9,8 +9,8 @@ from models.score import Score
 
 # DONE
 class DatabaseHandler:
-    def __init__(self):
-        self.session = Session()
+    def __init__(self, session):
+        self.session = session
 
     def __del__(self):
         self.session.close()
@@ -25,7 +25,7 @@ class DatabaseHandler:
             print(f"Баллы за ЕГЭ: {[school_exam.score_exam for school_exam in student.school_exams]}")
             print(f"Баллы за экзамены: {[score.exam_scores for score in student.exams]}")
             print(f"Участие в олимпиадах: {int(student.olympiad) if student.olympiad else 0}")
-            print(f"Посещение занятий: {[exam.attending_classes for exam in student.exams]}")
+            print(f"Посещение занятий: {[score.attending_classes for score in student.scores]}")
             print(f"Общий прогноз: {student.general_predict}")
             print(f"Прогноз по предметам: {[exam.subject_predict for exam in student.exams]}")
         else:
@@ -47,7 +47,7 @@ class DatabaseHandler:
             print(f'Такого студента нет \n{e}')
         return student
 
-    def add_student(self, student_name: str, group_id: int, list_school_exams: dict, take_part_olympiad: int,
+    def add_student(self, student_name: str, group_id: int, list_school_exams: dict[str, int], take_part_olympiad: int,
                     add_subjects: bool = True):
         new_student = Student(name=student_name, olympiad=take_part_olympiad, group_id=group_id, general_predict=0)
         self.session.add(new_student)
@@ -62,14 +62,14 @@ class DatabaseHandler:
             exams = []
             for subject in subjects:
                 exam = Exam(student_id=new_student.id, subject_id=subject.id,
-                            exam_scores=0, attending_classes=0, subject_predict=0)
+                            exam_scores=0, subject_predict=0)
                 exams.append(exam)
                 self.session.add(exam)
                 self.session.commit()
 
             for exam in exams:
                 score = Score(value=0, subject_id=exam.subject_id,
-                              student_id=exam.student_id)
+                              student_id=exam.student_id, attending_classes=0)
                 self.session.add(score)
             self.session.commit()
 
@@ -107,7 +107,7 @@ class DatabaseHandler:
             self.add_new_subject_for_all_students(new_subject)
         return new_subject
 
-    def add_score_in_subject(self, student_id: int, value: int, subject_name: str, ):
+    def add_score_in_subject(self, student_id: int, value: int, subject_name: str, attending_classes=0):
         subject = self.find_subject_by_name(subject_name)
         existing_score = self.session.query(Score).filter_by(student_id=student_id, subject_id=subject.id).first()
 
@@ -116,12 +116,12 @@ class DatabaseHandler:
             existing_score.value = value
         else:
             # Иначе создаем новую сущность
-            score = Score(value=value, subject_id=subject.id, student_id=student_id)
+            score = Score(value=value, subject_id=subject.id, student_id=student_id, attending_classes=attending_classes)
             self.session.add(score)
 
         self.session.commit()
 
-    def add_score_in_exam(self, student_id: int, value: int, subject_name: str, attending_classes=10):
+    def add_score_in_exam(self, student_id: int, value: int, subject_name: str):
         subject = self.find_subject_by_name(subject_name)
 
         existing_exam = self.session.query(Exam).filter_by(student_id=student_id, subject_id=subject.id).first()
@@ -134,7 +134,6 @@ class DatabaseHandler:
             subject = Exam(exam_scores=value,
                            subject_id=subject.id,
                            student_id=student_id,
-                           attending_classes=attending_classes,
                            subject_predict=0)
             self.session.add(subject)
 
@@ -148,14 +147,14 @@ class DatabaseHandler:
         for student in students:
             exam = Exam(student_id=student.id,
                         subject_id=new_subject.id,
-                        exam_scores=0,
-                        attending_classes=0)
+                        exam_scores=0)
             self.session.add(exam)
             self.session.commit()
 
             score = Score(value=0,
                           subject_id=new_subject.id,
-                          student_id=student.id)
+                          student_id=student.id,
+                          attending_classes=0)
             self.session.add(score)
             self.session.commit()
 
@@ -226,24 +225,42 @@ class DatabaseHandler:
                 print(
                     f"ID: {school_exam.id}, Баллы: {school_exam.score_exam}, Студент: {school_exam.student.name}, Предмет: {school_exam.exam_name}")
 
-    def add_prediction_student(self, student_id, value):
-        student = self.find_student_by_id(student_id)
-
+    def add_prediction_student(self, student_id, predict):
+        str_predict = ''
+        if predict < 40:
+            str_predict = 'НЕУД'
+        elif 40 <= predict < 60:
+            str_predict = 'УДОВЛ'
+        elif 60 <= predict < 80:
+            str_predict = 'ХОРОШО'
+        elif 80 <= predict <= 100:
+            str_predict = 'ОТЛИЧНО'
+        student = self.session.query(Student).filter_by(id=student_id).first()
         if student:
             # Если сущность существует, обновляем ее значение
-            student.general_predict = value
+            student.general_predict = str_predict
             self.session.commit()
         else:
             print('Такого студента не существует')
 
-    def add_prediction_subject(self, student_id, subject_id, value):
+    def add_prediction_subject(self, student_id, subject_id, predict):
+        str_predict = ''
+        if predict < 40:
+            str_predict = 'НЕУД'
+        elif 40 <= predict < 60:
+            str_predict = 'УДОВЛ'
+        elif 60 <= predict < 80:
+            str_predict = 'ХОРОШО'
+        elif 80 <= predict <= 100:
+            str_predict = 'ОТЛИЧНО'
+
         student = self.find_student_by_id(student_id)
 
         exam = self.session.query(Exam).filter_by(subject_id=subject_id, student_id=student.id).first()
 
         if student and exam:
             # Если сущность существует, обновляем ее значение
-            exam.subject_predict = value
+            exam.subject_predict = str_predict
             self.session.commit()
         else:
             print('Такого студента/предмета не существует')

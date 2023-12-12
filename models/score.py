@@ -8,6 +8,7 @@ class Score(Base):
     __tablename__ = 'scores'
     id = Column(Integer, primary_key=True)
     value = Column(Integer, nullable=False)
+    attending_classes = Column(Integer)
     subject_id = Column(Integer, ForeignKey('subjects.id'))
     subject = relationship('Subject', back_populates='scores')
     # exam_id = Column(Integer, ForeignKey('exams.id'))

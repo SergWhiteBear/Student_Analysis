@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy import Column, Integer, ForeignKey, String
 from sqlalchemy.orm import relationship
 
 from models.database import Base
@@ -12,5 +12,4 @@ class Exam(Base):
     subject_id = Column(Integer, ForeignKey('subjects.id'))
     subject = relationship('Subject', back_populates='exams')
     exam_scores = Column(Integer)
-    attending_classes = Column(Integer)
-    subject_predict = Column(Integer)
+    subject_predict = Column(String, nullable=True, default='')

@@ -9,7 +9,6 @@ from sklearn.svm import SVR
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from models.student import Student
-from database_handler import DatabaseHandler as dh
 
 
 # DONE
@@ -34,7 +33,6 @@ class DataAnalysis:
         self.model = None
         self.feature_scaler = MinMaxScaler()
         self.target_scaler = MinMaxScaler()
-        self.dh = dh()
 
     def __del__(self):
         self.session.close()
@@ -93,7 +91,7 @@ class DataAnalysis:
                           'ege_scores': [school_exam.score_exam for school_exam in student.school_exams],
                           'exam_scores': [score.exam_scores for score in student.exams],
                           'olympiad': int(student.olympiad) if student.olympiad else 0,
-                          'attending_classes': [exam.attending_classes for exam in student.exams]} for student in
+                          'attending_classes': [score.attending_classes for score in student.scores]} for student in
                          students]
         df = pd.DataFrame(students_data)
 
@@ -121,14 +119,14 @@ class DataAnalysis:
             print(f'Возникла ошибка \n{e}')
 
         # Оценка производительности модели на тестовом наборе данных
-        evaluate_model(self.model, X_test, y_test, model_type)
+        #evaluate_model(self.model, X_test, y_test, model_type)
 
         self.save_model(model_type)
         # График фактических и предсказанных значений
         predictions = self.model.predict(X_test)
-        self.plot_predictions(y_test, predictions, model_type)
+        # self.plot_predictions(y_test, predictions, model_type)
 
-    def general_predict(self, student_id: int, model_type: str = 'svr', train_model: bool = False):
+    def general_predict(self, student_id: int, model_type: str = 'svr', train_model: bool = True):
         """
         Общий вывод по данным, т.е. прогноз среднего балла за экзамены
         """
@@ -145,7 +143,7 @@ class DataAnalysis:
             'ege_scores': [school_exam.score_exam for school_exam in student.school_exams],
             'exam_scores': [score.exam_scores for score in student.exams],
             'olympiad': int(student.olympiad) if student.olympiad else 0,
-            'attending_classes': [exam.attending_classes for exam in student.exams]
+            'attending_classes': [score.attending_classes for score in student.scores]
         }
         df_student = pd.DataFrame([student_data])
 
@@ -170,10 +168,7 @@ class DataAnalysis:
         else:
             prediction = prediction[0][0]
 
-        # Теперь прогноз будет сразу записываться к студенту в базу
-        self.dh.add_prediction_student(student_id, prediction)
-
-        return prediction
+        return prediction*0.9
 
     def train_subject(self, subject_id: int, model_type: str = 'svr_subject'):
         """
@@ -184,11 +179,19 @@ class DataAnalysis:
         # Преобразуем данные студентов в формат DataFrame
         students_data = [{
             'name': student.name,
-            'semester_scores': [score.value for score in student.scores if subject_id == score.subject_id],
+            'semester_scores': [
+                score.value
+                for score in student.scores
+                if subject_id == score.subject_id
+            ],
             'ege_scores': [school_exam.score_exam for school_exam in student.school_exams],
-            'exam_scores': [score.exam_scores for score in student.exams if subject_id == score.subject_id],
+            'exam_scores': [
+                score.exam_scores
+                for score in student.exams
+                if subject_id == score.subject_id
+            ],
             'olympiad': int(student.olympiad) if student.olympiad else 0,
-            'attending_classes': [exam.attending_classes for exam in student.exams]
+            'attending_classes': [score.attending_classes for score in student.scores]
         } for student in students]
         df = pd.DataFrame(students_data)
 
@@ -207,7 +210,7 @@ class DataAnalysis:
         elif model_type == 'svr_subject':
             self.model = SVR()
         elif model_type == 'knn_subject':
-            self.model = KNeighborsRegressor(n_neighbors=5)
+            self.model = KNeighborsRegressor(n_neighbors=10)
 
         # Обучаем модель
         try:
@@ -215,20 +218,21 @@ class DataAnalysis:
         except Exception as e:
             print(f'Возникла ошибка \n{e}')
 
-        self.save_model(model_type)
+        self.save_model(f'{model_type}_{subject_id}')
 
         # Оценка производительности модели на тестовом наборе данных
-        evaluate_model(self.model, X_test, y_test, model_type)
+        #evaluate_model(self.model, X_test, y_test, model_type)
 
         # График фактических и предсказанных значений
         predictions = self.model.predict(X_test)
-        self.plot_predictions(y_test, predictions, model_type)
+        # self.plot_predictions(y_test, predictions, model_type)
 
-    def subject_predict(self, student_id: int, subject_id: int, model_type: str = 'svr_subject', train_model: bool = False):
+    def subject_predict(self, student_id: int, subject_id: int, model_type: str = 'svr_subject',
+                        train_model: bool = True):
         if train_model:
             self.train_subject(subject_id, model_type)
         else:
-            self.load_model(model_type)
+            self.load_model(f'{model_type}_{subject_id}')
 
         # Извлекаем данные по конкретному студенту из базы данных
         student = self.session.query(Student).filter_by(id=student_id).first()
@@ -239,7 +243,7 @@ class DataAnalysis:
             'ege_scores': [school_exam.score_exam for school_exam in student.school_exams],
             'exam_scores': [score.exam_scores for score in student.exams if subject_id == score.subject_id],
             'olympiad': int(student.olympiad) if student.olympiad else 0,
-            'attending_classes': [exam.attending_classes for exam in student.exams]
+            'attending_classes': [score.attending_classes for score in student.scores]
         }
         df_student = pd.DataFrame([student_data])
 
@@ -263,10 +267,33 @@ class DataAnalysis:
         else:
             prediction = prediction[0][0]
 
-        # Теперь прогноз для предмета у студента записывается сразу в базу
-        self.dh.add_prediction_subject(student_id, subject_id, prediction)
+        prediction = self.correct_subject_prediction(student_id, subject_id, prediction)
 
         return prediction
+
+    def correct_subject_prediction(self, student_id, subject_id, prediction):
+        # Извлекаем данные по конкретному студенту из базы данных
+        student = self.session.query(Student).filter_by(id=student_id).first()
+
+        # Извлекаем баллы за предмет в семестре
+        semester_scores_for_subject = [score.value for score in student.scores if score.subject_id == subject_id]
+        attending_classes_for_subject = [score.attending_classes for score in student.scores if
+                                         score.subject_id == subject_id]
+
+        if any(90 <= score <= 100 for score in semester_scores_for_subject):
+            return max(semester_scores_for_subject)
+        elif any(40 <= score < 70 for score in semester_scores_for_subject):
+            if any(5 <= attending_classes <= 10 for attending_classes in attending_classes_for_subject):
+                return prediction * 1.05
+            else:
+                return prediction
+        elif any(70 <= score < 90 for score in semester_scores_for_subject):
+            if any(5 <= attending_classes <= 10 for attending_classes in attending_classes_for_subject):
+                return prediction * 1.2
+            else:
+                return prediction
+        else:
+            return 0
 
     @staticmethod
     def plot_predictions(actual, predicted, model_name):
@@ -287,7 +314,7 @@ class DataAnalysis:
         if self.model is not None:
             model_filename = f"{model_type}_model.pkl"
             joblib.dump(self.model, model_filename)
-            print(f"Модель сохранена в файл: {model_filename}")
+            # print(f"Модель сохранена в файл: {model_filename}")
         else:
             print("Ошибка: Модель не обучена.")
 
@@ -298,7 +325,7 @@ class DataAnalysis:
         model_filename = f"{model_type}_model.pkl"
         try:
             self.model = joblib.load(model_filename)
-            print(f"Модель загружена из файла: {model_filename}")
+            # print(f"Модель загружена из файла: {model_filename}")
         except FileNotFoundError:
             print("Ошибка: Файл с моделью не найден.")
             print("Тренируем модель...")

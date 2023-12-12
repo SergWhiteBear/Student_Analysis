@@ -13,4 +13,4 @@ class Student(Base):
     exams = relationship('Exam', back_populates='student', cascade='all, delete-orphan')
     scores = relationship('Score', back_populates='student', cascade='all, delete-orphan')
     school_exams = relationship('School_exam', back_populates='student', cascade='all, delete-orphan')
-    general_predict = Column(Integer)
+    general_predict = Column(String, nullable=True, default='')
