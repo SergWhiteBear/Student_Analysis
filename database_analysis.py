@@ -7,22 +7,11 @@ from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.svm import SVR
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from models.student import Student
 
 
 # DONE
-def evaluate_model(model, X, y, model_name):
-    """
-    Оценивает производительность модели с использованием MAE.
-    """
-    predictions = model.predict(X)
-    mae = mean_absolute_error(y, predictions)
-    mse = mean_squared_error(y, predictions)
-    print(f"{model_name} - MAE: {mae} - MSE: {mse}")
-    r2 = r2_score(y, predictions)
-
-    print(f"R^2: {r2}")
 
 
 class DataAnalysis:
@@ -119,12 +108,13 @@ class DataAnalysis:
             print(f'Возникла ошибка \n{e}')
 
         # Оценка производительности модели на тестовом наборе данных
-        #evaluate_model(self.model, X_test, y_test, model_type)
+        self.evaluate_model(X_test, y_test, model_type)
 
         self.save_model(model_type)
         # График фактических и предсказанных значений
         predictions = self.model.predict(X_test)
         # self.plot_predictions(y_test, predictions, model_type)
+        self.plot_residuals(y_test, predictions, model_type)
 
     def general_predict(self, student_id: int, model_type: str = 'svr', train_model: bool = True):
         """
@@ -168,7 +158,7 @@ class DataAnalysis:
         else:
             prediction = prediction[0][0]
 
-        return prediction*0.9
+        return prediction * 0.9
 
     def train_subject(self, subject_id: int, model_type: str = 'svr_subject'):
         """
@@ -221,11 +211,12 @@ class DataAnalysis:
         self.save_model(f'{model_type}_{subject_id}')
 
         # Оценка производительности модели на тестовом наборе данных
-        #evaluate_model(self.model, X_test, y_test, model_type)
+        self.evaluate_model(X_test, y_test, model_type)
 
         # График фактических и предсказанных значений
         predictions = self.model.predict(X_test)
         # self.plot_predictions(y_test, predictions, model_type)
+        self.plot_residuals(y_test, predictions, model_type)
 
     def subject_predict(self, student_id: int, subject_id: int, model_type: str = 'svr_subject',
                         train_model: bool = True):
@@ -306,6 +297,36 @@ class DataAnalysis:
         plt.title(f'Фактические vs Предсказанные - {model_name}')
         plt.legend()
         plt.show()
+
+    @staticmethod
+    def plot_residuals(y_true, y_pred, model_name):
+        """
+        Строит график остатков (Residual Plot).
+        """
+        residuals = y_true - y_pred
+
+        plt.figure(figsize=(6, 6))
+
+        # Добавим линию LOWESS
+        # lowess = sm.nonparametric.lowess(residuals, y_pred)
+
+        plt.scatter(y_pred, residuals, alpha=0.5, color="b")
+        # plt.plot(lowess[:, 0], lowess[:, 1], color='red', lw=2)
+
+        plt.title(f'График остатков - {model_name}')
+        plt.xlabel('Предсказанные значения')
+        plt.ylabel('Остатки')
+        plt.show()
+
+    def evaluate_model(self, X, y, model_name):
+        """
+        Оценивает производительность модели с использованием MAE.
+        """
+        predictions = self.model.predict(X)
+        mae = mean_absolute_error(y, predictions)
+        mse = mean_squared_error(y, predictions)
+
+        print(f"{model_name} - MAE: {mae} - MSE: {mse}")
 
     def save_model(self, model_type):
         """

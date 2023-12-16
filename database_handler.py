@@ -264,3 +264,9 @@ class DatabaseHandler:
             self.session.commit()
         else:
             print('Такого студента/предмета не существует')
+
+    def print_subject_info(self, subject_id):
+        pass
+
+    def print_exam_info(self, exam_id):
+        pass

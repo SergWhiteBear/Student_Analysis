@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -5,12 +7,13 @@ from sqlalchemy.orm import sessionmaker
 from models.database import Session, Base
 from database_handler import DatabaseHandler
 from database_analysis import DataAnalysis
+import create_datebase as db_creator
 from models.exam import Exam
-from models.score import Score
 from models.student import Student
 
 engine = create_engine(f'sqlite:///student_db.sqlite')
 Session = sessionmaker(bind=engine)
+
 
 def import_to_sql(xlsx_name="new_data1", db_name='student_db.sqlite'):
     # Инициализируем базу данных
@@ -31,13 +34,12 @@ def import_to_sql(xlsx_name="new_data1", db_name='student_db.sqlite'):
 
 
 def export_to_excel(sqlite_file='student_train1', start_id=1, end_id=10):
-
     table_names = ["students", "scores", "exams", "school_exams"]
 
     with pd.ExcelWriter("student_analysis.xlsx", engine='xlsxwriter') as writer:
         for table_name in table_names:
             if table_name != 'students':
-               query = f"SELECT * FROM {table_name} WHERE student_id >= {start_id} AND student_id <= {end_id}"
+                query = f"SELECT * FROM {table_name} WHERE student_id >= {start_id} AND student_id <= {end_id}"
             else:
                 query = f"SELECT * FROM {table_name} WHERE id >= {start_id} AND id <= {end_id}"
             df = pd.read_sql_query(query, con=engine)
@@ -64,7 +66,6 @@ def predict_for_excel(name='student_db', model_type='knn', limit=10, xlsx_file='
         exams = session.query(Exam).filter_by(student_id=student.id).all()
 
         for exam in exams:
-
             predict = database_analysis.subject_predict(student.id, exam.subject_id, f'{model_type}_subject', False)
             database_handler.add_prediction_subject(student.id, exam.subject_id, predict)
         count += 1
@@ -74,8 +75,9 @@ def main():
     while True:
         print("1. Импортировать данные в SQLite")
         print("2. Проанализировать данные и экспортировать в Excel")
-        print("3. Выйти")
-        choice = input("Введите команду (1/2/3): ")
+        print("3. Поработать с базой в консоли")
+        print("4. Выйти")
+        choice = input("Введите команду (1/2/3/4): ")
 
         if choice == '1':
             xlsx_name = input("Введите название файла для импорта: ")
@@ -88,73 +90,80 @@ def main():
             export_to_excel(sqlite_file)
             print("Данные проанализированы и экспортированы в Excel!")
         elif choice == '3':
+            handler()
+        elif choice == '4':
             break
         else:
             print("Ошибка! Попробуйте выбрать снова.")
 
 
+def print_menu():
+    print("1. Просмотреть информацию о студенте")
+    print("2. Добавить нового студента")
+    print("3. Удалить студента")
+    print("4. Просмотреть информацию о предмете")
+    print("5. Добавить новый предмет")
+    print("6. Добавить баллы за предмет")
+    print("7. Просмотреть информацию об экзамене")
+    print("8. Добавить баллы за экзамен")
+    print("9. Просмотреть все группы")
+    print("10. Просмотреть всех студентов в группе")
+    print("0. Выйти")
+
+
+def handler():
+    session = Session()
+    db_handler = DatabaseHandler(session)
+
+    while True:
+        print_menu()
+        choice = input("Введите номер действия (0-10): ")
+
+        if choice == "1":
+            student_id = int(input("Введите ID студента: "))
+            db_handler.print_student_info(student_id)
+        elif choice == "2":
+            student_name = input("Введите имя студента: ")
+            group_id = int(input("Введите ID группы: "))
+            # Дополнительные вопросы для добавления студента
+            # ...
+            db_handler.add_student(student_name, group_id, {}, 0)  # Передайте необходимые параметры
+        elif choice == "3":
+            student_id = int(input("Введите ID студента для удаления: "))
+            db_handler.delete_student(student_id)
+        elif choice == "4":
+            subject_id = int(input("Введите ID предмета: "))
+            # Дополнительные вопросы для просмотра информации о предмете
+            # ...
+            db_handler.print_subject_info(subject_id)
+        elif choice == "5":
+            subject_name = input("Введите название предмета: ")
+            db_handler.add_subject(subject_name)
+        elif choice == "6":
+            # Дополнительные вопросы для добавления баллов за предмет
+            # ...
+            db_handler.add_score_in_subject(0, 0, "Название предмета")
+        elif choice == "7":
+            exam_id = int(input("Введите ID экзамена: "))
+            # Дополнительные вопросы для просмотра информации об экзамене
+            # ...
+            db_handler.print_exam_info(exam_id)
+        elif choice == "8":
+            # Дополнительные вопросы для добавления баллов за экзамен
+            # ...
+            db_handler.add_score_in_exam(0, 0, "Название предмета")
+        elif choice == "9":
+            db_handler.print_all_data("Группы")
+        elif choice == "10":
+            group_id = int(input("Введите ID группы: "))
+            db_handler.print_all_data("Студенты", group_id)
+        elif choice == "0":
+            print("Выход из программы.")
+            break
+        else:
+            print("Неверный ввод. Пожалуйста, введите число от 0 до 10.")
+
+
 if __name__ == '__main__':
     main()
 
-
-
-
-
-
-    '''db_is_created = os.path.exists("student_train1.sqlite")
-    if db_is_created:
-        print(f'База с именем student_train1.sqlite существует')
-    else:
-        print('Создаю базу...')
-        db_creator.create_database()
-    session = Session()
-    database_analysis = DataAnalysis(session)
-    database_handler = DatabaseHandler(session)
-    database_analysis.train('svr')
-    database_analysis.train_subject(1, 'svr_subject')
-    database_analysis.train_subject(2, 'svr_subject')
-    database_analysis.train_subject(3, 'svr_subject')
-    database_analysis.train_subject(4, 'svr_subject')
-
-    print(database_analysis.general_predict(1))
-    print(database_analysis.general_predict(2))
-    print(database_analysis.general_predict(3))
-
-    list_exams = {'Русский': 40, 'Математика': 40, 'Информатика': 40, 'Физика': 0}
-    database_handler.delete_student(501)
-    database_handler.add_student('студент', 1,
-                                 list_exams,
-                                 1, True)
-    database_handler.add_score_in_subject(501, 40, 'Предмет0')
-    database_handler.add_score_in_subject(501, 40, 'Предмет1')
-    database_handler.add_score_in_subject(501, 40, 'Предмет2')
-    database_handler.add_score_in_subject(501, 40, 'Предмет3')
-    #predict = database_analysis.general_predict(501, 'svr')
-    #database_handler.add_prediction_student(501, predict)
-    #database_handler.print_student_info(501)
-
-    #print(database_analysis.general_predict(1))
-    database_handler.print_student_info(1)
-    database_handler.add_score_in_exam(1, 0, 'Предмет0')
-    database_handler.add_score_in_exam(1, 0, 'Предмет1')
-    database_handler.add_score_in_exam(1, 0, 'Предмет2')
-    database_handler.add_score_in_exam(1, 0, 'Предмет3')
-    print()
-    print(database_analysis.subject_predict(1, 1, 'knn_subject'))
-    print(database_analysis.subject_predict(1, 2, 'knn_subject'))
-    print(database_analysis.subject_predict(1, 3, 'knn_subject'))
-    print(database_analysis.subject_predict(1, 4, 'knn_subject'))
-    print()
-    database_handler.print_student_info(2)
-    database_handler.add_score_in_exam(2, 0, 'Предмет0')
-    database_handler.add_score_in_exam(2, 0, 'Предмет1')
-    database_handler.add_score_in_exam(2, 0, 'Предмет2')
-    database_handler.add_score_in_exam(2, 0, 'Предмет3')
-
-    print(database_analysis.subject_predict(2, 1, 'knn_subject'))
-    print(database_analysis.subject_predict(2, 2, 'knn_subject'))
-    print(database_analysis.subject_predict(2, 3, 'knn_subject'))
-    print(database_analysis.subject_predict(2, 4, 'knn_subject'))
-
-    database_handler.add_prediction_subject(2, 1, predict=database_analysis.subject_predict(2, 1, 'knn_subject'))
-'''
